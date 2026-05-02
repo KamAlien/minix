@@ -367,23 +367,10 @@ void balance_queues(void)
 	struct schedproc *rmp;
 	int r, proc_nr;
 	/* No balancear hasta que se vuelva a llamar a esta función */
-	if(balance == 0)
+	// subir de priridad a los procesos que no son intensivos
+	if(balance == 15)
 	{
-		// subir de priridad a los procesos que no son intensivos
-		balance = 1;
-		for (proc_nr=0, rmp=schedproc; proc_nr < NR_PROCS; proc_nr++, rmp++)
-		{
-			if (rmp->flags & IN_USE) {
-				if(rmp->priority > USER_Q && rmp->count_quantums == 0) /* si el proceso no es intensivo, subirle la prioridad */
-				{
-					rmp->priority -= 1; /* subir prioridad */
-					schedule_process_local(rmp);
-				}
-			}
-		}
-		return;
-	}
-	for (proc_nr=0, rmp=schedproc; proc_nr < NR_PROCS; proc_nr++, rmp++) {
+		for (proc_nr=0, rmp=schedproc; proc_nr < NR_PROCS; proc_nr++, rmp++) {
 		if (rmp->flags & IN_USE) {
 			rmp -> count_quantums = 0; /* reset count of quantums since last priority change */
 			if (rmp->priority > rmp->max_priority) {
@@ -392,8 +379,23 @@ void balance_queues(void)
 			}
 		}
 	}
+		balance = 0; /* No balancear hasta que se vuelva a llamar a esta función */
+	}
 
+	else
+	{
+		for (proc_nr=0, rmp=schedproc; proc_nr < NR_PROCS; proc_nr++, rmp++)
+		{
+				if (rmp->flags & IN_USE) {
+		if(rmp->priority > USER_Q && rmp->count_quantums == 0) /* si el proceso no es intensivo, subirle la prioridad */
+		{
+				rmp->priority -= 1; /* subir prioridad */
+				schedule_process_local(rmp);
+		}
+				}
+		}
+		balance += 5;
+	}
 	if ((r = sys_setalarm(balance_timeout, 0)) != OK)
 		panic("sys_setalarm failed: %d", r);
-	balance = 0; /* No balancear hasta que se vuelva a llamar a esta función */
 }

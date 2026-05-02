@@ -12,7 +12,7 @@ int main()
     
         }
 
-        for(int j = 0; j < 10; j++) {
+        for(int j = 0; j < 40; j++) {
             // Hacer algo no intensivo en CPU
             sleep(2); // Dormir un poco para simular un proceso no intensivo
         }
