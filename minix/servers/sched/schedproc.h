@@ -16,24 +16,24 @@
 #endif
 
 /**
- * We might later want to add more information to this table, such as the
- * process owner, process group or cpumask.
+ * Más adelante podríamos querer añadir más información a esta tabla, como el
+ * propietario del proceso, el grupo del proceso o la máscara de CPU.
  */
 
-EXTERN struct schedproc {
-	endpoint_t endpoint;	/* process endpoint id */
-	endpoint_t parent;	/* parent endpoint id */
-	unsigned flags;		/* flag bits */
+EXTERN struct schedproc
+{
+	endpoint_t endpoint; /* id de endpoint del proceso */
+	endpoint_t parent;	 /* id de endpoint del padre */
+	unsigned flags;		 /* bits de banderas */
 
-	/* User space scheduling */
-	unsigned max_priority;	/* this process' highest allowed priority */
-	unsigned priority;		/* the process' current priority */
-	unsigned time_slice;		/* this process's time slice */
-	unsigned cpu;		/* what CPU is the process running on */
-	bitchunk_t cpu_mask[BITMAP_CHUNKS(CONFIG_MAX_CPUS)]; /* what CPUs is the
-								process allowed
-								to run on */
+	/* Planificación en espacio de usuario */
+	unsigned max_priority;								 /* la prioridad máxima permitida de este proceso */
+	unsigned priority;									 /* la prioridad actual del proceso */
+	unsigned time_slice;								 /* el quantum de tiempo de este proceso */
+	unsigned count_quantums;							 /* el número de quantums que el proceso ha consumido */
+	unsigned cpu;										 /* en qué CPU se está ejecutando el proceso */
+	bitchunk_t cpu_mask[BITMAP_CHUNKS(CONFIG_MAX_CPUS)]; /* en qué CPUs tiene permitido ejecutarse el proceso */
 } schedproc[NR_PROCS];
 
 /* Flag values */
-#define IN_USE		0x00001	/* set when 'schedproc' slot in use */
+#define IN_USE 0x00001 /* set when 'schedproc' slot in use */

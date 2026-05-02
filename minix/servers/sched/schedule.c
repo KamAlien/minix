@@ -16,6 +16,9 @@
 static unsigned balance_timeout;
 
 #define BALANCE_TIMEOUT	5 /* how often to balance queues in seconds */
+int balance = 0; /* Esto nos permitira saber si hay que
+                            balancear o subirle la prioridad a los procesoso no
+							intensivos */
 
 static int schedule_process(struct schedproc * rmp, unsigned flags);
 
@@ -86,6 +89,7 @@ static void pick_cpu(struct schedproc * proc)
 
 int do_noquantum(message *m_ptr)
 {
+	unsigned limit_quantums = 5;
 	register struct schedproc *rmp;
 	int rv, proc_nr_n;
 
@@ -94,10 +98,17 @@ int do_noquantum(message *m_ptr)
 		m_ptr->m_source);
 		return EBADEPT;
 	}
-
 	rmp = &schedproc[proc_nr_n];
-	if (rmp->priority < MIN_USER_Q) {
-		rmp->priority += 1; /* lower priority */
+	if(rmp->priority < MIN_USER_Q)
+	{
+		rmp->count_quantums ++; // Aqui podemos ponerle un if para que sume siemore que sea mayor que la prioridad minima
+		
+		if (rmp->count_quantums >= limit_quantums) 
+		{
+			rmp->priority += 1; /* lower priority */
+			rmp->count_quantums = 0; /* reset count of quantums since last priority change 
+			                        osea resetea el contador de quatums una vez que se baje su prioridad*/
+		} 
 	}
 
 	if ((rv = schedule_process_local(rmp)) != OK) {
@@ -142,64 +153,65 @@ int do_start_scheduling(message *m_ptr)
 	register struct schedproc *rmp;
 	int rv, proc_nr_n, parent_nr_n;
 	
-	/* we can handle two kinds of messages here */
+	/* podemos manejar dos tipos de mensajes aquí */
 	assert(m_ptr->m_type == SCHEDULING_START || 
 		m_ptr->m_type == SCHEDULING_INHERIT);
 
-	/* check who can send you requests */
+	/* verificar quién puede enviarte solicitudes */
 	if (!accept_message(m_ptr))
 		return EPERM;
 
-	/* Resolve endpoint to proc slot. */
+	/* Resolver endpoint a slot de proceso. */
 	if ((rv = sched_isemtyendpt(m_ptr->m_lsys_sched_scheduling_start.endpoint,
 			&proc_nr_n)) != OK) {
 		return rv;
 	}
 	rmp = &schedproc[proc_nr_n];
 
-	/* Populate process slot */
+	/* Poblar slot de proceso */
 	rmp->endpoint     = m_ptr->m_lsys_sched_scheduling_start.endpoint;
 	rmp->parent       = m_ptr->m_lsys_sched_scheduling_start.parent;
 	rmp->max_priority = m_ptr->m_lsys_sched_scheduling_start.maxprio;
+	rmp -> count_quantums = 0;
 	if (rmp->max_priority >= NR_SCHED_QUEUES) {
 		return EINVAL;
 	}
 
-	/* Inherit current priority and time slice from parent. Since there
-	 * is currently only one scheduler scheduling the whole system, this
-	 * value is local and we assert that the parent endpoint is valid */
+	/* Heredar prioridad actual y porción de tiempo del padre. Dado que
+	 * actualmente solo hay un programador programando todo el sistema, este
+	 * valor es local y afirmamos que el endpoint del padre es válido */
 	if (rmp->endpoint == rmp->parent) {
-		/* We have a special case here for init, which is the first
-		   process scheduled, and the parent of itself. */
+		/* Tenemos un caso especial aquí para init, que es el primer
+		   proceso programado, y el padre de sí mismo. */
 		rmp->priority   = USER_Q;
 		rmp->time_slice = DEFAULT_USER_TIME_SLICE;
 
 		/*
-		 * Since kernel never changes the cpu of a process, all are
-		 * started on the BSP and the userspace scheduling hasn't
-		 * changed that yet either, we can be sure that BSP is the
-		 * processor where the processes run now.
+		 * Dado que el kernel nunca cambia la cpu de un proceso, todos son
+		 * iniciados en el BSP y la programación del espacio de usuario no
+		 * ha cambiado eso todavía, podemos estar seguros de que BSP es el
+		 * procesador donde los procesos se ejecutan ahora.
 		 */
 #ifdef CONFIG_SMP
 		rmp->cpu = machine.bsp_id;
-		/* FIXME set the cpu mask */
+		/* FIXME establecer la máscara de cpu */
 #endif
 	}
 	
 	switch (m_ptr->m_type) {
 
 	case SCHEDULING_START:
-		/* We have a special case here for system processes, for which
-		 * quanum and priority are set explicitly rather than inherited 
-		 * from the parent */
+		/* Tenemos un caso especial aquí para procesos del sistema, para los cuales
+		 * la porción de tiempo y la prioridad se establecen explícitamente en lugar de heredarse 
+		 * del padre */
 		rmp->priority   = rmp->max_priority;
 		rmp->time_slice = m_ptr->m_lsys_sched_scheduling_start.quantum;
 		break;
 		
 	case SCHEDULING_INHERIT:
-		/* Inherit current priority and time slice from parent. Since there
-		 * is currently only one scheduler scheduling the whole system, this
-		 * value is local and we assert that the parent endpoint is valid */
+		/* Heredar prioridad actual y porción de tiempo del padre. Dado que
+		 * actualmente solo hay un programador programando todo el sistema, este
+		 * valor es local y afirmamos que el endpoint del padre es válido */
 		if ((rv = sched_isokendpt(m_ptr->m_lsys_sched_scheduling_start.parent,
 				&parent_nr_n)) != OK)
 			return rv;
@@ -209,12 +221,12 @@ int do_start_scheduling(message *m_ptr)
 		break;
 		
 	default: 
-		/* not reachable */
+		/* no alcanzable */
 		assert(0);
 	}
 
-	/* Take over scheduling the process. The kernel reply message populates
-	 * the processes current priority and its time slice */
+	/* Tomar el control de la programación del proceso. El mensaje de respuesta del kernel
+	 * pobla la prioridad actual del proceso y su porción de tiempo */
 	if ((rv = sys_schedctl(0, rmp->endpoint, 0, 0, 0)) != OK) {
 		printf("Sched: Error taking over scheduling for %d, kernel said %d\n",
 			rmp->endpoint, rv);
@@ -222,10 +234,10 @@ int do_start_scheduling(message *m_ptr)
 	}
 	rmp->flags = IN_USE;
 
-	/* Schedule the process, giving it some quantum */
+	/* Programar el proceso, dándole algo de porción de tiempo */
 	pick_cpu(rmp);
 	while ((rv = schedule_process(rmp, SCHEDULE_CHANGE_ALL)) == EBADCPU) {
-		/* don't try this CPU ever again */
+		/* no intentar esta CPU nunca más */
 		cpu_proc[rmp->cpu] = CPU_DEAD;
 		pick_cpu(rmp);
 	}
@@ -236,11 +248,11 @@ int do_start_scheduling(message *m_ptr)
 		return rv;
 	}
 
-	/* Mark ourselves as the new scheduler.
-	 * By default, processes are scheduled by the parents scheduler. In case
-	 * this scheduler would want to delegate scheduling to another
-	 * scheduler, it could do so and then write the endpoint of that
-	 * scheduler into the "scheduler" field.
+	/* Marcarnos a nosotros mismos como el nuevo programador.
+	 * Por defecto, los procesos son programados por el programador de los padres. En caso
+	 * de que este programador quiera delegar la programación a otro
+	 * programador, podría hacerlo y luego escribir el endpoint de ese
+	 * programador en el campo "scheduler".
 	 */
 
 	m_ptr->m_sched_lsys_scheduling_start.scheduler = SCHED_PROC_NR;
@@ -354,11 +366,28 @@ void balance_queues(void)
 {
 	struct schedproc *rmp;
 	int r, proc_nr;
-
+	/* No balancear hasta que se vuelva a llamar a esta función */
+	if(balance == 0)
+	{
+		// subir de priridad a los procesos que no son intensivos
+		balance = 1;
+		for (proc_nr=0, rmp=schedproc; proc_nr < NR_PROCS; proc_nr++, rmp++)
+		{
+			if (rmp->flags & IN_USE) {
+				if(rmp->priority > USER_Q && rmp->count_quantums == 0) /* si el proceso no es intensivo, subirle la prioridad */
+				{
+					rmp->priority -= 1; /* subir prioridad */
+					schedule_process_local(rmp);
+				}
+			}
+		}
+		return;
+	}
 	for (proc_nr=0, rmp=schedproc; proc_nr < NR_PROCS; proc_nr++, rmp++) {
 		if (rmp->flags & IN_USE) {
+			rmp -> count_quantums = 0; /* reset count of quantums since last priority change */
 			if (rmp->priority > rmp->max_priority) {
-				rmp->priority -= 1; /* increase priority */
+				rmp->priority = rmp->max_priority; /* increase priority */
 				schedule_process_local(rmp);
 			}
 		}
@@ -366,4 +395,5 @@ void balance_queues(void)
 
 	if ((r = sys_setalarm(balance_timeout, 0)) != OK)
 		panic("sys_setalarm failed: %d", r);
+	balance = 0; /* No balancear hasta que se vuelva a llamar a esta función */
 }
