@@ -98,6 +98,8 @@ int do_noquantum(message *m_ptr)
 
 	rmp = &schedproc[proc_nr_n];
 	rmp->count_quantums++;
+	printf("SCHED: penalizando pid=%d nueva priority=%d\n", proc_nr_n, rmp->priority);
+	/* Si el proceso se ha quedado sin quantum demasiadas veces, bajamos su prioridad */
 	if (rmp->priority < MIN_USER_Q && rmp->count_quantums == limit) {
 		rmp->count_quantums = 0;
 		rmp->priority += 1; /* lower priority */
@@ -361,6 +363,7 @@ void balance_queues(void)
 
 	for (proc_nr=0, rmp=schedproc; proc_nr < NR_PROCS; proc_nr++, rmp++) {
 		if (rmp->flags & IN_USE) {
+			printf("SCHED: balanceando pid=%d priority=%d\n, max=%d count=%d\n", proc_nr, rmp->priority, rmp->max_priority, rmp->count_quantums);
 			if (rmp->priority > rmp->max_priority) {
 				rmp->priority -= 1; /* increase priority */
 				schedule_process_local(rmp);
