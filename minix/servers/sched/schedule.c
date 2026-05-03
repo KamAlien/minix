@@ -97,6 +97,7 @@ int do_noquantum(message *m_ptr)
 	}
 
 	rmp = &schedproc[proc_nr_n];
+	rmp->count_quantums++;
 	if (rmp->priority < MIN_USER_Q && rmp->count_quantums == limit) {
 		rmp->count_quantums = 0;
 		rmp->priority += 1; /* lower priority */
