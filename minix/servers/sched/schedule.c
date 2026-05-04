@@ -23,7 +23,7 @@ static int schedule_process(struct schedproc *rmp, unsigned flags);
 #define SCHEDULE_CHANGE_QUANTUM 0x2
 #define SCHEDULE_CHANGE_CPU 0x4
 
-#define SCHEDULE_CHANGE_ALL	(	\ b
+#define SCHEDULE_CHANGE_ALL	(   \
 		SCHEDULE_CHANGE_PRIO	|	\
 		SCHEDULE_CHANGE_QUANTUM	|	\
 		SCHEDULE_CHANGE_CPU		\
@@ -386,7 +386,8 @@ static unsigned cpu_proc[CONFIG_MAX_CPUS];
 			{
 				if (rmp->flags & IN_USE)
 				{
-					printf("SCHED: balanceando pid=%d priority=%d\n, max=%d count=%d\n", proc_nr, rmp->priority, rmp->max_priority, rmp->count_quantums);
+					printf("SCHED: balanceando pid=%d priority=%d\n, max=%d count=%d\n", proc_nr, rmp->priority, 
+						rmp->max_priority, rmp->count_quantums);
 
 					if (rmp->priority > rmp->max_priority && rmp->count_quantums == 0)
 					{
