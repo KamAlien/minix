@@ -18,7 +18,6 @@ static unsigned balance_timeout;
 #define BALANCE_TIMEOUT 5 /* how often to balance queues in seconds */
 #define LIMIT 10		  /* number of quantums a process can consume before we lower its priority */
 static int schedule_process(struct schedproc *rmp, unsigned flags);
-int balance = 0;
 
 #define SCHEDULE_CHANGE_PRIO 0x1
 #define SCHEDULE_CHANGE_QUANTUM 0x2
@@ -102,13 +101,12 @@ static unsigned cpu_proc[CONFIG_MAX_CPUS];
 			}
 
 			rmp = &schedproc[proc_nr_n];
-			//Contador de quantums gastados por el proceso
+			// Contador de quantums gastados por el proceso
 			rmp->count_quantums++;
 			printf("SCHED: penalizando pid=%d nueva priority=%d\n", proc_nr_n, rmp->priority);
 			/* Si el proceso se ha quedado sin quantum demasiadas veces, bajamos su prioridad */
 			if (rmp->priority < MIN_USER_Q && rmp->count_quantums >= LIMIT)
 			{
-				rmp->count_quantums = 0;
 				rmp->priority += 1; /* lower priority */
 			}
 
@@ -382,40 +380,20 @@ static unsigned cpu_proc[CONFIG_MAX_CPUS];
 			struct schedproc *rmp;
 			int r, proc_nr;
 
-			// Subirles la prioridad a todos los procesos 
-			if (balance == 10)
-			{
-				balance = 0;
-				for (proc_nr = 0, rmp = schedproc; proc_nr < NR_PROCS; proc_nr++, rmp++)
-				{
-					if (rmp->flags & IN_USE)
-					{
-						printf("SCHED: balanceando pid=%d priority=%d\n, max=%d count=%d\n", proc_nr, rmp->priority, rmp->max_priority, rmp->count_quantums);
+			// Subirle la prioridad solo a los que no han gastado ningun quantum
 
-						if (rmp->priority > rmp->max_priority)
-						{
-							rmp->priority = rmp->max_priority; /* increase priority */
-							schedule_process_local(rmp);
-						}
-					}
-				}
-			}
-			//Subirle la prioridad solo a los que no han gastado ningun quantum
-			else
+			for (proc_nr = 0, rmp = schedproc; proc_nr < NR_PROCS; proc_nr++, rmp++)
 			{
-				balance  += 5;
-				for (proc_nr = 0, rmp = schedproc; proc_nr < NR_PROCS; proc_nr++, rmp++)
+				if (rmp->flags & IN_USE)
 				{
-					if (rmp->flags & IN_USE)
-					{
-						printf("SCHED: balanceando pid=%d priority=%d\n, max=%d count=%d\n", proc_nr, rmp->priority, rmp->max_priority, rmp->count_quantums);
+					printf("SCHED: balanceando pid=%d priority=%d\n, max=%d count=%d\n", proc_nr, rmp->priority, rmp->max_priority, rmp->count_quantums);
 
-						if (rmp->priority > rmp->max_priority && rmp->count_quantums == 0)
-						{
-							rmp->priority -= 1; /* increase priority */
-							schedule_process_local(rmp);
-						}
+					if (rmp->priority > rmp->max_priority && rmp->count_quantums == 0)
+					{
+						rmp->priority -= 1; /* increase priority */
+						schedule_process_local(rmp);
 					}
+					rmp->count_quantums = 0; /* reset quantum count for the next round */
 				}
 			}
 
