@@ -17,6 +17,7 @@ static unsigned balance_timeout;
 
 #define BALANCE_TIMEOUT 5 /* how often to balance queues in seconds */
 #define LIMIT 10		  /* number of quantums a process can consume before we lower its priority */
+unsigned balance = 0;
 static int schedule_process(struct schedproc *rmp, unsigned flags);
 
 #define SCHEDULE_CHANGE_PRIO 0x1
@@ -103,11 +104,15 @@ static unsigned cpu_proc[CONFIG_MAX_CPUS];
 			rmp = &schedproc[proc_nr_n];
 			// Contador de quantums gastados por el proceso
 			rmp->count_quantums++;
+			rmp->count_time_slices ++;
+			
 			printf("SCHED: penalizando pid=%d nueva priority=%d\n", proc_nr_n, rmp->priority);
 			/* Si el proceso se ha quedado sin quantum demasiadas veces, bajamos su prioridad */
 			if (rmp->priority < MIN_USER_Q && rmp->count_quantums >= LIMIT)
 			{
 				rmp->priority += 1; /* lower priority */
+				rmp->count_quantums = 0; /* reset quantum count */
+				printf("SCHED: penalizando pid=%d nueva priority=%d\n", proc_nr_n, rmp->priority);
 			}
 
 			if ((rv = schedule_process_local(rmp)) != OK)
@@ -176,6 +181,7 @@ static unsigned cpu_proc[CONFIG_MAX_CPUS];
 			rmp->parent = m_ptr->m_lsys_sched_scheduling_start.parent;
 			rmp->max_priority = m_ptr->m_lsys_sched_scheduling_start.maxprio;
 			rmp->count_quantums = 0;
+			rmp->count_time_slices = 0;
 			if (rmp->max_priority >= NR_SCHED_QUEUES)
 			{
 				return EINVAL;
@@ -389,15 +395,15 @@ static unsigned cpu_proc[CONFIG_MAX_CPUS];
 					printf("SCHED: balanceando pid=%d priority=%d\n, max=%d count=%d\n", proc_nr, rmp->priority, 
 						rmp->max_priority, rmp->count_quantums);
 
-					if (rmp->priority > rmp->max_priority && rmp->count_quantums == 0)
+					if (rmp->priority > rmp->max_priority)
 					{
 						rmp->priority -= 1; /* increase priority */
+						rmp->count_time_slices = 0; /* reset time slice count */
+						rmp->count_quantums = 0; /* reset quantum count */
 						schedule_process_local(rmp);
 					}
-					rmp->count_quantums = 0; /* reset quantum count for the next round */
 				}
 			}
-
 			if ((r = sys_setalarm(balance_timeout, 0)) != OK)
 				panic("sys_setalarm failed: %d", r);
 		}
