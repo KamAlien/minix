@@ -16,7 +16,7 @@
 static unsigned balance_timeout;
 
 #define BALANCE_TIMEOUT 5 /* how often to balance queues in seconds */
-#define LIMIT 10		  /* number of quantums a process can consume before we lower its priority */
+#define LIMIT 20		  /* number of quantums a process can consume before we lower its priority */
 unsigned balance = 0;
 static int schedule_process(struct schedproc *rmp, unsigned flags);
 
@@ -104,19 +104,16 @@ int do_noquantum(message *m_ptr)
 	// Contador de quantums gastados por el proceso
 	rmp->count_quantums++;
 	rmp->count_time_slices++;
-	
-	printf("SCHED: penalizando pid=%d nueva priority=%d\n", proc_nr_n, rmp->priority);
+
 	/* Si el proceso se ha quedado sin quantum demasiadas veces, bajamos su prioridad */
 	if (rmp->priority < MIN_USER_Q)
 	{
-		if(rmp->count_quantums >= LIMIT)
+		if (rmp->count_quantums >= LIMIT)
 		{
 			rmp->priority += 1;		 /* lower priority */
-		rmp->count_quantums = 0; /* reset quantum count */
-		printf("SCHED: penalizando pid=%d nueva priority=%d\n", proc_nr_n, rmp->priority);
+			rmp->count_quantums = 0; /* reset quantum count */
 		}
 	}
-	
 
 	if ((rv = schedule_process_local(rmp)) != OK)
 	{
@@ -388,10 +385,10 @@ void balance_queues(void)
 {
 	struct schedproc *rmp;
 	int r, proc_nr;
-
+	balance += 1;
 	// Subirle la prioridad solo a los que no han gastado ningun quantum
 
-	if (balance == 10)
+	if (balance == 3)
 	{
 		for (proc_nr = 0, rmp = schedproc; proc_nr < NR_PROCS; proc_nr++, rmp++)
 		{
@@ -403,10 +400,10 @@ void balance_queues(void)
 				if (rmp->priority > rmp->max_priority)
 				{
 					rmp->priority = rmp->max_priority; /* increase priority */
-					rmp->count_time_slices = 0; /* reset time slice count */
-					rmp->count_quantums = 0;	/* reset quantum count */
+					rmp->count_quantums = 0;		   /* reset quantum count */
 					schedule_process_local(rmp);
 				}
+				rmp->count_time_slices = 0;
 			}
 		}
 		balance = 0;
@@ -422,14 +419,15 @@ void balance_queues(void)
 
 				if (rmp->priority > rmp->max_priority && rmp->count_time_slices == 0)
 				{
-					rmp->priority -= 1;			/* increase priority */
-					rmp->count_quantums = 0;	/* reset quantum count */
+					rmp->priority -= 1;		 /* increase priority */
+					rmp->count_quantums = 0; /* reset quantum count */
 					schedule_process_local(rmp);
 				}
+				rmp->count_time_slices = 0;
 			}
 		}
-		balance += 5;
 	}
-	if ((r = sys_setalarm(balance_timeout, 0)) != OK)
+
+	if ((r = sys_setalarm(balance_timeout * sys_hz())) != OK)
 		panic("sys_setalarm failed: %d", r);
 }
