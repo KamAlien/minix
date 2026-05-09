@@ -386,48 +386,39 @@ void balance_queues(void)
 	struct schedproc *rmp;
 	int r, proc_nr;
 	balance += 1;
+	printf("Se esta llamando a balance queues------\n");
 	// Subirle la prioridad solo a los que no han gastado ningun quantum
 
-	if (balance == 3)
+	for (proc_nr = 0, rmp = schedproc; proc_nr < NR_PROCS; proc_nr++, rmp++)
 	{
-		for (proc_nr = 0, rmp = schedproc; proc_nr < NR_PROCS; proc_nr++, rmp++)
+		if (rmp->flags & IN_USE)
 		{
-			if (rmp->flags & IN_USE)
+
+			if (rmp->priority > rmp->max_priority)
 			{
 				printf("SCHED: balanceando pid=%d priority=%d\n, max=%d count=%d\n", proc_nr, rmp->priority,
-					   rmp->max_priority, rmp->count_quantums);
 
-				if (rmp->priority > rmp->max_priority)
+					   rmp->max_priority, rmp->count_quantums);
+				if (balance >= 3)
 				{
 					rmp->priority = rmp->max_priority; /* increase priority */
 					rmp->count_quantums = 0;		   /* reset quantum count */
-					schedule_process_local(rmp);
 				}
-				rmp->count_time_slices = 0;
-			}
-		}
-		balance = 0;
-	}
-	else
-	{
-		for (proc_nr = 0, rmp = schedproc; proc_nr < NR_PROCS; proc_nr++, rmp++)
-		{
-			if (rmp->flags & IN_USE)
-			{
-				printf("SCHED: balanceando pid=%d priority=%d\n, max=%d count=%d\n", proc_nr, rmp->priority,
-					   rmp->max_priority, rmp->count_quantums);
-
-				if (rmp->priority > rmp->max_priority && rmp->count_time_slices == 0)
+				else
 				{
 					rmp->priority -= 1;		 /* increase priority */
 					rmp->count_quantums = 0; /* reset quantum count */
-					schedule_process_local(rmp);
 				}
-				rmp->count_time_slices = 0;
 			}
+			if(balance >=3)
+			{
+				balance = 0;
+			}
+			rmp->count_time_slices = 0;
+			schedule_process_local(rmp);
 		}
 	}
 
-	if ((r = sys_setalarm(balance_timeout * sys_hz())) != OK)
+	if ((r = sys_setalarm(balance_timeout * sys_hz(), 0)) != OK)
 		panic("sys_setalarm failed: %d", r);
 }
