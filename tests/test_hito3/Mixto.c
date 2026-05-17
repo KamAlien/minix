@@ -10,7 +10,7 @@ int main()
     printf("Mi pid es %d\n", getpid());
     while (1) {
         // Hacer algo intensivo en CPU
-        for(i = 0; i < 1000000000; i++) {
+        for(i = 0; i < 2000000000; i++) {
     
         }
 

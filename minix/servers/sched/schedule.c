@@ -16,8 +16,8 @@
 static unsigned balance_timeout;
 
 #define BALANCE_TIMEOUT 5 /* how often to balance queues in seconds */
-#define LIMIT 20		  /* number of quantums a process can consume before we lower its priority */
-unsigned balance = 0;
+#define LIMIT 5		  /* number of quantums a process can consume before we lower its priority */
+static unsigned balance = 0;
 static int schedule_process(struct schedproc *rmp, unsigned flags);
 
 #define SCHEDULE_CHANGE_PRIO 0x1
@@ -95,8 +95,8 @@ int do_noquantum(message *m_ptr)
 
 	if (sched_isokendpt(m_ptr->m_source, &proc_nr_n) != OK)
 	{
-		printf("SCHED: WARNING: got an invalid endpoint in OOQ msg %u.\n",
-			   m_ptr->m_source);
+		//printf("SCHED: WARNING: got an invalid endpoint in OOQ msg %u.\n",
+			   //m_ptr->m_source);
 		return EBADEPT;
 	}
 
@@ -104,14 +104,22 @@ int do_noquantum(message *m_ptr)
 	// Contador de quantums gastados por el proceso
 	rmp->count_quantums++;
 	rmp->count_time_slices++;
-
-	/* Si el proceso se ha quedado sin quantum demasiadas veces, bajamos su prioridad */
-	if (rmp->priority < MIN_USER_Q)
+	if (balance < 5)
 	{
-		if (rmp->count_quantums >= LIMIT)
+		rmp->count_quantums++;
+		rmp->count_time_slices++;
+		rmp->count_quantums++;
+		rmp->count_time_slices++;
+		/* Si el proceso se ha quedado sin quantum demasiadas veces, bajamos su prioridad */
+		if (rmp->priority < MIN_USER_Q)
 		{
-			rmp->priority += 1;		 /* lower priority */
-			rmp->count_quantums = 0; /* reset quantum count */
+			if (rmp->count_quantums >= LIMIT)
+			{
+				//printf("=======Estoy penalizando==========\n");
+				//printf("El proceso %d/n", getpid())
+				rmp->priority += 1;		 /* lower priority */
+				rmp->count_quantums = 0; /* reset quantum count */
+			}
 		}
 	}
 
@@ -383,10 +391,9 @@ void init_scheduling(void)
  */
 void balance_queues(void)
 {
+	balance += 1;
 	struct schedproc *rmp;
 	int r, proc_nr;
-	balance += 1;
-	printf("Se esta llamando a balance queues------\n");
 	// Subirle la prioridad solo a los que no han gastado ningun quantum
 
 	for (proc_nr = 0, rmp = schedproc; proc_nr < NR_PROCS; proc_nr++, rmp++)
@@ -396,29 +403,35 @@ void balance_queues(void)
 
 			if (rmp->priority > rmp->max_priority)
 			{
-				printf("SCHED: balanceando pid=%d priority=%d\n, max=%d count=%d\n", proc_nr, rmp->priority,
+				//printf("SCHED: balanceando pid=%d priority=%d\n, max=%d count=%d\n", proc_nr, rmp->priority,
 
-					   rmp->max_priority, rmp->count_quantums);
-				if (balance >= 3)
+					  // rmp->max_priority, rmp->count_quantums);
+				if (balance >= 5)
 				{
+					//printf("======Entre al priority boost =======\n");
+					//printf("SCHED: balanceando pid=%d priority=%d\n, max=%d count=%d\n", proc_nr, rmp->priority,
+						   // rmp->max_priority, rmp->count_quantums);
 					rmp->priority = rmp->max_priority; /* increase priority */
-					rmp->count_quantums = 0;		   /* reset quantum count */
+					schedule_process_local(rmp);
 				}
-				else
+				else if (rmp->count_time_slices == 0)
 				{
+					//printf("========Balanceo normal============ \n");
+					//printf("SCHED: balanceando pid=%d priority=%d\n, max=%d count=%d\n", proc_nr, rmp->priority,
+						//   rmp->max_priority, rmp->count_quantums);
 					rmp->priority -= 1;		 /* increase priority */
-					rmp->count_quantums = 0; /* reset quantum count */
+					schedule_process_local(rmp);
 				}
-			}
-			if(balance >=3)
-			{
-				balance = 0;
 			}
 			rmp->count_time_slices = 0;
-			schedule_process_local(rmp);
+			rmp->count_quantums = 0;		   /* reset quantum count */
 		}
 	}
+	if (balance >= 5)
+	{
+		balance = 0;
+	}
 
-	if ((r = sys_setalarm(balance_timeout * sys_hz(), 0)) != OK)
+	if ((r = sys_setalarm( BALANCE_TIMEOUT * sys_hz(), 0)) != OK)
 		panic("sys_setalarm failed: %d", r);
 }
