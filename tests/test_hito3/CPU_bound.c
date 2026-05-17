@@ -1,7 +1,7 @@
 int main()
 {
     while (1) {
-        // Hacer algo intensivo en CPU
+        printf("");
     }
     return 0;
 }

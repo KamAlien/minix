@@ -30,7 +30,8 @@ EXTERN struct schedproc
 	unsigned max_priority;								 /* la prioridad máxima permitida de este proceso */
 	unsigned priority;									 /* la prioridad actual del proceso */
 	unsigned time_slice;								 /* el quantum de tiempo de este proceso */
-	unsigned count_quantums;							 /* el número de quantums que el proceso ha consumido */
+	unsigned count_quantums;
+	unsigned count_time_slices;						      /* el número de quantums que el proceso ha consumido por ventana */
 	unsigned cpu;										 /* en qué CPU se está ejecutando el proceso */
 	bitchunk_t cpu_mask[BITMAP_CHUNKS(CONFIG_MAX_CPUS)]; /* en qué CPUs tiene permitido ejecutarse el proceso */
 } schedproc[NR_PROCS];
